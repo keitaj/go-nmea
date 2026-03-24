@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/keita/go-nmea/pkg/nmea"
+	"github.com/keitaj/go-nmea/pkg/nmea"
 )
 
 func main() {

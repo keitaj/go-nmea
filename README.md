@@ -13,7 +13,7 @@ A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-co
 ## Install
 
 ```bash
-go get github.com/keita/go-nmea
+go get github.com/keitaj/go-nmea
 ```
 
 ## Usage as Library
@@ -25,7 +25,7 @@ import (
     "fmt"
     "os"
 
-    "github.com/keita/go-nmea/pkg/nmea"
+    "github.com/keitaj/go-nmea/pkg/nmea"
 )
 
 func main() {

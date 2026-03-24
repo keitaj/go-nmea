@@ -1,3 +1,3 @@
-module github.com/keita/go-nmea
+module github.com/keitaj/go-nmea
 
 go 1.26.1
