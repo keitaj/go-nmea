@@ -1,0 +1,14 @@
+bin/
+coverage.out
+coverage.html
+*.exe
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# AI tools
+.claude/
+
+# OS
+.DS_Store
