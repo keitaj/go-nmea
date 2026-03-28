@@ -586,3 +586,99 @@ func TestUnknownSentenceReturnsBaseSentence(t *testing.T) {
 		t.Errorf("expected *BaseSentence for unknown type, got %T", s)
 	}
 }
+
+// --- Custom parser registration tests ---
+
+// HDT is a custom sentence type for testing: Heading True.
+type HDT struct {
+	BaseSentence
+	Heading float64
+	True    string
+}
+
+func TestRegisterParser(t *testing.T) {
+	RegisterParser("HDT", func(s BaseSentence) (Sentence, error) {
+		if len(s.Fields) < 2 {
+			return nil, newParseError(ErrFieldCount, s.Raw, "HDT requires at least 2 fields, got %d", len(s.Fields))
+		}
+		return &HDT{
+			BaseSentence: s,
+			Heading:      ParseFloat(s.Fields[0]),
+			True:         s.Fields[1],
+		}, nil
+	})
+	defer UnregisterParser("HDT")
+
+	// $GPHDT,274.07,T*03
+	raw := "$GPHDT,274.07,T*03"
+	s, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	hdt, ok := s.(*HDT)
+	if !ok {
+		t.Fatalf("expected *HDT, got %T", s)
+	}
+	if !almostEqual(hdt.Heading, 274.07) {
+		t.Errorf("heading: got %f, want 274.07", hdt.Heading)
+	}
+	if hdt.True != "T" {
+		t.Errorf("true: got %q, want %q", hdt.True, "T")
+	}
+	if hdt.GetTalker() != TalkerGP {
+		t.Errorf("talker: got %q, want %q", hdt.GetTalker(), TalkerGP)
+	}
+}
+
+func TestUnregisterParser(t *testing.T) {
+	RegisterParser("FOO", func(s BaseSentence) (Sentence, error) {
+		return &s, nil
+	})
+	UnregisterParser("FOO")
+
+	// After unregister, should fall back to BaseSentence
+	raw := "$GPFOO,1,2*52"
+	s, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := s.(*BaseSentence); !ok {
+		t.Errorf("expected *BaseSentence after unregister, got %T", s)
+	}
+}
+
+func TestCustomParserOverridesBuiltIn(t *testing.T) {
+	// Override the built-in GGA parser
+	called := false
+	RegisterParser("GGA", func(s BaseSentence) (Sentence, error) {
+		called = true
+		return parseGGA(s)
+	})
+	defer UnregisterParser("GGA")
+
+	raw := "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*6F"
+	_, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("custom parser should have been called instead of built-in")
+	}
+}
+
+func TestCustomParserError(t *testing.T) {
+	RegisterParser("ERR", func(s BaseSentence) (Sentence, error) {
+		return nil, newParseError(ErrFieldCount, s.Raw, "custom error")
+	})
+	defer UnregisterParser("ERR")
+
+	raw := "$GPERR,1*4F"
+	_, err := Parse(raw)
+	if err == nil {
+		t.Fatal("expected error from custom parser")
+	}
+	if !errors.Is(err, ErrInsufficientFields) {
+		t.Errorf("expected ErrInsufficientFields, got %v", err)
+	}
+}
