@@ -1,22 +1,45 @@
 // Package nmea provides a parser for NMEA 0183 sentences commonly used in GNSS receivers.
 //
-// Supported sentence types:
-//   - GGA: Global Positioning System Fix Data (position, quality, altitude)
-//   - GLL: Geographic Position - Latitude/Longitude
-//   - RMC: Recommended Minimum Navigation Data (position, velocity, date)
-//   - VTG: Course Over Ground and Ground Speed
-//   - GSA: DOP and Active Satellites
-//   - GSV: Satellites in View (signal strength, elevation, azimuth)
-//   - ZDA: Time and Date
-//   - GBS: GNSS Satellite Fault Detection
-//   - GST: GNSS Pseudorange Error Statistics
+// Built-in sentence types: GGA, GLL, RMC, VTG, GSA, GSV, ZDA, GBS, GST.
+//
+// Custom sentence types can be registered with [RegisterParser]:
+//
+//	nmea.RegisterParser("HDT", func(s nmea.BaseSentence) (nmea.Sentence, error) {
+//	    // parse fields from s.Fields
+//	})
 package nmea
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+// ParserFunc is the function signature for custom sentence parsers.
+type ParserFunc func(s BaseSentence) (Sentence, error)
+
+var (
+	customParsers   = make(map[string]ParserFunc)
+	customParsersMu sync.RWMutex
+)
+
+// RegisterParser registers a custom parser for the given sentence type.
+// The sentenceType should be the 3-character type code (e.g., "HDT", "XDR").
+// If a parser for the same type is already registered, it is replaced.
+// Built-in parsers (GGA, RMC, etc.) can also be overridden.
+func RegisterParser(sentenceType string, parser ParserFunc) {
+	customParsersMu.Lock()
+	defer customParsersMu.Unlock()
+	customParsers[sentenceType] = parser
+}
+
+// UnregisterParser removes a custom parser for the given sentence type.
+func UnregisterParser(sentenceType string) {
+	customParsersMu.Lock()
+	defer customParsersMu.Unlock()
+	delete(customParsers, sentenceType)
+}
 
 // TalkerID represents the GNSS constellation identifier.
 type TalkerID string
@@ -190,10 +213,19 @@ type GST struct {
 
 // Parse parses a raw NMEA sentence string and returns the appropriate typed struct.
 // All returned types implement the Sentence interface.
+// Custom parsers registered via [RegisterParser] take precedence over built-in parsers.
 func Parse(raw string) (Sentence, error) {
 	s, err := parseSentence(raw)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check custom parsers first (allows overriding built-in types)
+	customParsersMu.RLock()
+	parser, ok := customParsers[s.Type]
+	customParsersMu.RUnlock()
+	if ok {
+		return parser(s)
 	}
 
 	switch s.Type {
@@ -294,16 +326,16 @@ func parseGGA(s BaseSentence) (*GGA, error) {
 
 	gga := &GGA{BaseSentence: s}
 	gga.Time = s.Fields[0]
-	gga.Latitude = parseLatLon(s.Fields[1], s.Fields[2])
-	gga.Longitude = parseLatLon(s.Fields[3], s.Fields[4])
-	gga.Quality = FixQuality(parseInt(s.Fields[5]))
-	gga.NumSatellites = parseInt(s.Fields[6])
-	gga.HDOP = parseFloat(s.Fields[7])
-	gga.Altitude = parseFloat(s.Fields[8])
+	gga.Latitude = ParseLatLon(s.Fields[1], s.Fields[2])
+	gga.Longitude = ParseLatLon(s.Fields[3], s.Fields[4])
+	gga.Quality = FixQuality(ParseInt(s.Fields[5]))
+	gga.NumSatellites = ParseInt(s.Fields[6])
+	gga.HDOP = ParseFloat(s.Fields[7])
+	gga.Altitude = ParseFloat(s.Fields[8])
 	// Fields[9] = altitude units (M)
-	gga.GeoidSep = parseFloat(s.Fields[10])
+	gga.GeoidSep = ParseFloat(s.Fields[10])
 	// Fields[11] = geoidal sep units (M)
-	gga.DGPSAge = parseFloat(s.Fields[12])
+	gga.DGPSAge = ParseFloat(s.Fields[12])
 	gga.DGPSStationID = s.Fields[13]
 
 	return gga, nil
@@ -318,12 +350,12 @@ func parseRMC(s BaseSentence) (*RMC, error) {
 	rmc := &RMC{BaseSentence: s}
 	rmc.Time = s.Fields[0]
 	rmc.Status = s.Fields[1]
-	rmc.Latitude = parseLatLon(s.Fields[2], s.Fields[3])
-	rmc.Longitude = parseLatLon(s.Fields[4], s.Fields[5])
-	rmc.Speed = parseFloat(s.Fields[6])
-	rmc.Course = parseFloat(s.Fields[7])
+	rmc.Latitude = ParseLatLon(s.Fields[2], s.Fields[3])
+	rmc.Longitude = ParseLatLon(s.Fields[4], s.Fields[5])
+	rmc.Speed = ParseFloat(s.Fields[6])
+	rmc.Course = ParseFloat(s.Fields[7])
 	rmc.Date = s.Fields[8]
-	rmc.MagVar = parseFloat(s.Fields[9])
+	rmc.MagVar = ParseFloat(s.Fields[9])
 	rmc.MagVarDir = s.Fields[10]
 	if len(s.Fields) > 11 {
 		rmc.Mode = s.Fields[11]
@@ -343,7 +375,7 @@ func parseGSA(s BaseSentence) (*GSA, error) {
 
 	gsa := &GSA{BaseSentence: s}
 	gsa.Mode = s.Fields[0]
-	gsa.FixType = parseInt(s.Fields[1])
+	gsa.FixType = ParseInt(s.Fields[1])
 
 	// Determine DOP field positions.
 	// Standard: fields 14-16. With fewer satellite slots, DOP shifts left.
@@ -351,20 +383,20 @@ func parseGSA(s BaseSentence) (*GSA, error) {
 	dopStart := n - 3
 	if n > 17 {
 		// NMEA 4.10+: SystemID is the last field, DOP is 3 fields before it
-		gsa.SystemID = parseInt(s.Fields[n-1])
+		gsa.SystemID = ParseInt(s.Fields[n-1])
 		dopStart = n - 4
 	}
 
 	// Satellite IDs: fields 2 through dopStart-1
 	for i := 2; i < dopStart; i++ {
-		if id := parseInt(s.Fields[i]); id > 0 {
+		if id := ParseInt(s.Fields[i]); id > 0 {
 			gsa.SVIDs = append(gsa.SVIDs, id)
 		}
 	}
 
-	gsa.PDOP = parseFloat(s.Fields[dopStart])
-	gsa.HDOP = parseFloat(s.Fields[dopStart+1])
-	gsa.VDOP = parseFloat(s.Fields[dopStart+2])
+	gsa.PDOP = ParseFloat(s.Fields[dopStart])
+	gsa.HDOP = ParseFloat(s.Fields[dopStart+1])
+	gsa.VDOP = ParseFloat(s.Fields[dopStart+2])
 
 	return gsa, nil
 }
@@ -376,20 +408,20 @@ func parseGSV(s BaseSentence) (*GSV, error) {
 	}
 
 	gsv := &GSV{BaseSentence: s}
-	gsv.TotalMsgs = parseInt(s.Fields[0])
-	gsv.MsgNum = parseInt(s.Fields[1])
-	gsv.TotalSats = parseInt(s.Fields[2])
+	gsv.TotalMsgs = ParseInt(s.Fields[0])
+	gsv.MsgNum = ParseInt(s.Fields[1])
+	gsv.TotalSats = ParseInt(s.Fields[2])
 
 	// Each satellite takes 4 fields: SVID, elevation, azimuth, SNR
 	for i := 3; i+3 < len(s.Fields); i += 4 {
 		sat := SatelliteInfo{
-			SVID:      parseInt(s.Fields[i]),
-			Elevation: parseInt(s.Fields[i+1]),
-			Azimuth:   parseInt(s.Fields[i+2]),
+			SVID:      ParseInt(s.Fields[i]),
+			Elevation: ParseInt(s.Fields[i+1]),
+			Azimuth:   ParseInt(s.Fields[i+2]),
 			SNR:       -1, // default: not tracked
 		}
 		if s.Fields[i+3] != "" {
-			sat.SNR = parseInt(s.Fields[i+3])
+			sat.SNR = ParseInt(s.Fields[i+3])
 		}
 		gsv.Satellites = append(gsv.Satellites, sat)
 	}
@@ -404,8 +436,8 @@ func parseGLL(s BaseSentence) (*GLL, error) {
 	}
 
 	gll := &GLL{BaseSentence: s}
-	gll.Latitude = parseLatLon(s.Fields[0], s.Fields[1])
-	gll.Longitude = parseLatLon(s.Fields[2], s.Fields[3])
+	gll.Latitude = ParseLatLon(s.Fields[0], s.Fields[1])
+	gll.Longitude = ParseLatLon(s.Fields[2], s.Fields[3])
 	gll.Time = s.Fields[4]
 	if len(s.Fields) > 5 {
 		gll.Status = s.Fields[5]
@@ -424,13 +456,13 @@ func parseVTG(s BaseSentence) (*VTG, error) {
 	}
 
 	vtg := &VTG{BaseSentence: s}
-	vtg.CourseTrue = parseFloat(s.Fields[0])
+	vtg.CourseTrue = ParseFloat(s.Fields[0])
 	// Fields[1] = "T" (true)
-	vtg.CourseMag = parseFloat(s.Fields[2])
+	vtg.CourseMag = ParseFloat(s.Fields[2])
 	// Fields[3] = "M" (magnetic)
-	vtg.SpeedKnots = parseFloat(s.Fields[4])
+	vtg.SpeedKnots = ParseFloat(s.Fields[4])
 	// Fields[5] = "N" (knots)
-	vtg.SpeedKmh = parseFloat(s.Fields[6])
+	vtg.SpeedKmh = ParseFloat(s.Fields[6])
 	// Fields[7] = "K" (km/h)
 	if len(s.Fields) > 8 {
 		vtg.Mode = s.Fields[8]
@@ -447,14 +479,14 @@ func parseZDA(s BaseSentence) (*ZDA, error) {
 
 	zda := &ZDA{BaseSentence: s}
 	zda.Time = s.Fields[0]
-	zda.Day = parseInt(s.Fields[1])
-	zda.Month = parseInt(s.Fields[2])
-	zda.Year = parseInt(s.Fields[3])
+	zda.Day = ParseInt(s.Fields[1])
+	zda.Month = ParseInt(s.Fields[2])
+	zda.Year = ParseInt(s.Fields[3])
 	if len(s.Fields) > 4 {
-		zda.LocalHours = parseInt(s.Fields[4])
+		zda.LocalHours = ParseInt(s.Fields[4])
 	}
 	if len(s.Fields) > 5 {
-		zda.LocalMins = parseInt(s.Fields[5])
+		zda.LocalMins = ParseInt(s.Fields[5])
 	}
 
 	return zda, nil
@@ -468,13 +500,13 @@ func parseGBS(s BaseSentence) (*GBS, error) {
 
 	gbs := &GBS{BaseSentence: s}
 	gbs.Time = s.Fields[0]
-	gbs.ErrLat = parseFloat(s.Fields[1])
-	gbs.ErrLon = parseFloat(s.Fields[2])
-	gbs.ErrAlt = parseFloat(s.Fields[3])
-	gbs.SVID = parseInt(s.Fields[4])
-	gbs.Prob = parseFloat(s.Fields[5])
-	gbs.Bias = parseFloat(s.Fields[6])
-	gbs.StdDev = parseFloat(s.Fields[7])
+	gbs.ErrLat = ParseFloat(s.Fields[1])
+	gbs.ErrLon = ParseFloat(s.Fields[2])
+	gbs.ErrAlt = ParseFloat(s.Fields[3])
+	gbs.SVID = ParseInt(s.Fields[4])
+	gbs.Prob = ParseFloat(s.Fields[5])
+	gbs.Bias = ParseFloat(s.Fields[6])
+	gbs.StdDev = ParseFloat(s.Fields[7])
 
 	return gbs, nil
 }
@@ -487,21 +519,22 @@ func parseGST(s BaseSentence) (*GST, error) {
 
 	gst := &GST{BaseSentence: s}
 	gst.Time = s.Fields[0]
-	gst.RangeRMS = parseFloat(s.Fields[1])
-	gst.StdMajor = parseFloat(s.Fields[2])
-	gst.StdMinor = parseFloat(s.Fields[3])
-	gst.Orient = parseFloat(s.Fields[4])
-	gst.StdLat = parseFloat(s.Fields[5])
-	gst.StdLon = parseFloat(s.Fields[6])
-	gst.StdAlt = parseFloat(s.Fields[7])
+	gst.RangeRMS = ParseFloat(s.Fields[1])
+	gst.StdMajor = ParseFloat(s.Fields[2])
+	gst.StdMinor = ParseFloat(s.Fields[3])
+	gst.Orient = ParseFloat(s.Fields[4])
+	gst.StdLat = ParseFloat(s.Fields[5])
+	gst.StdLon = ParseFloat(s.Fields[6])
+	gst.StdAlt = ParseFloat(s.Fields[7])
 
 	return gst, nil
 }
 
 // --- Helper functions ---
+// These are exported for use by custom parser implementations.
 
-// parseLatLon converts NMEA lat/lon format (ddmm.mmmm) to decimal degrees.
-func parseLatLon(value, direction string) float64 {
+// ParseLatLon converts NMEA lat/lon format (ddmm.mmmm) to decimal degrees.
+func ParseLatLon(value, direction string) float64 {
 	if value == "" || direction == "" {
 		return 0
 	}
@@ -526,7 +559,8 @@ func parseLatLon(value, direction string) float64 {
 	return result
 }
 
-func parseFloat(s string) float64 {
+// ParseFloat parses a string to float64, returning 0 for empty strings.
+func ParseFloat(s string) float64 {
 	if s == "" {
 		return 0
 	}
@@ -534,7 +568,8 @@ func parseFloat(s string) float64 {
 	return v
 }
 
-func parseInt(s string) int {
+// ParseInt parses a string to int, returning 0 for empty strings.
+func ParseInt(s string) int {
 	if s == "" {
 		return 0
 	}

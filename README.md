@@ -73,6 +73,38 @@ func main() {
 }
 ```
 
+## Custom Sentence Types
+
+Register your own parsers for proprietary or unsupported sentence types:
+
+```go
+// Define your custom type
+type HDT struct {
+    nmea.BaseSentence
+    Heading float64
+    True    string
+}
+
+// Register it
+nmea.RegisterParser("HDT", func(s nmea.BaseSentence) (nmea.Sentence, error) {
+    if len(s.Fields) < 2 {
+        return nil, fmt.Errorf("HDT requires 2 fields, got %d", len(s.Fields))
+    }
+    return &HDT{
+        BaseSentence: s,
+        Heading:      nmea.ParseFloat(s.Fields[0]),
+        True:         s.Fields[1],
+    }, nil
+})
+
+// Now Parse() handles HDT sentences automatically
+s, _ := nmea.Parse("$GPHDT,274.07,T*03")
+hdt := s.(*HDT)
+fmt.Printf("Heading: %.2f°\n", hdt.Heading)
+```
+
+Helper functions `ParseFloat`, `ParseInt`, and `ParseLatLon` are exported for use in custom parsers.
+
 ## CLI Tool
 
 ```bash
