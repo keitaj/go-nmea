@@ -28,8 +28,8 @@ type HasSpeed interface {
 // BaseSentence interface methods.
 
 func (s BaseSentence) GetTalker() TalkerID { return s.Talker }
-func (s BaseSentence) GetType() string      { return s.Type }
-func (s BaseSentence) GetRaw() string       { return s.Raw }
+func (s BaseSentence) GetType() string     { return s.Type }
+func (s BaseSentence) GetRaw() string      { return s.Raw }
 
 // HasPosition implementations.
 

@@ -144,11 +144,11 @@ type GLL struct {
 // VTG represents a Course Over Ground and Ground Speed sentence.
 type VTG struct {
 	BaseSentence
-	CourseTrue     float64 // Course over ground (true north, degrees)
-	CourseMag      float64 // Course over ground (magnetic north, degrees)
-	SpeedKnots     float64 // Speed over ground in knots
-	SpeedKmh       float64 // Speed over ground in km/h
-	Mode           string  // A=Autonomous, D=Differential, E=Estimated, N=Not valid
+	CourseTrue float64 // Course over ground (true north, degrees)
+	CourseMag  float64 // Course over ground (magnetic north, degrees)
+	SpeedKnots float64 // Speed over ground in knots
+	SpeedKmh   float64 // Speed over ground in km/h
+	Mode       string  // A=Autonomous, D=Differential, E=Estimated, N=Not valid
 }
 
 // ZDA represents a Time and Date sentence.
@@ -165,20 +165,20 @@ type ZDA struct {
 // GBS represents a GNSS Satellite Fault Detection sentence.
 type GBS struct {
 	BaseSentence
-	Time      string  // UTC time hhmmss.ss
-	ErrLat    float64 // Expected error in latitude (meters, 1-sigma)
-	ErrLon    float64 // Expected error in longitude (meters, 1-sigma)
-	ErrAlt    float64 // Expected error in altitude (meters, 1-sigma)
-	SVID      int     // Satellite ID of most likely failed satellite
-	Prob      float64 // Probability of missed detection
-	Bias      float64 // Estimate of bias on most likely failed satellite (meters)
-	StdDev    float64 // Standard deviation of bias estimate (meters)
+	Time   string  // UTC time hhmmss.ss
+	ErrLat float64 // Expected error in latitude (meters, 1-sigma)
+	ErrLon float64 // Expected error in longitude (meters, 1-sigma)
+	ErrAlt float64 // Expected error in altitude (meters, 1-sigma)
+	SVID   int     // Satellite ID of most likely failed satellite
+	Prob   float64 // Probability of missed detection
+	Bias   float64 // Estimate of bias on most likely failed satellite (meters)
+	StdDev float64 // Standard deviation of bias estimate (meters)
 }
 
 // GST represents a GNSS Pseudorange Error Statistics sentence.
 type GST struct {
 	BaseSentence
-	Time    string  // UTC time hhmmss.ss
+	Time     string  // UTC time hhmmss.ss
 	RangeRMS float64 // RMS value of standard deviation of range inputs (meters)
 	StdMajor float64 // Standard deviation of semi-major axis (meters, 1-sigma)
 	StdMinor float64 // Standard deviation of semi-minor axis (meters, 1-sigma)
