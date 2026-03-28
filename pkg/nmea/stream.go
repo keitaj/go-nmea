@@ -7,7 +7,7 @@ import (
 )
 
 // Handler is called for each parsed NMEA sentence.
-type Handler func(sentence interface{}, raw string)
+type Handler func(sentence Sentence, raw string)
 
 // ErrorHandler is called when a sentence fails to parse.
 type ErrorHandler func(raw string, err error)

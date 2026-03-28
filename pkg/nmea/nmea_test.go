@@ -1,6 +1,7 @@
 package nmea
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -406,5 +407,182 @@ func TestFixQualityString(t *testing.T) {
 		if got := tt.quality.String(); got != tt.want {
 			t.Errorf("FixQuality(%d).String() = %q, want %q", tt.quality, got, tt.want)
 		}
+	}
+}
+
+// --- Interface tests ---
+
+func TestSentenceInterface(t *testing.T) {
+	raw := "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*6F"
+	s, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.GetTalker() != TalkerGP {
+		t.Errorf("GetTalker: got %q, want %q", s.GetTalker(), TalkerGP)
+	}
+	if s.GetType() != "GGA" {
+		t.Errorf("GetType: got %q, want %q", s.GetType(), "GGA")
+	}
+	if s.GetRaw() != raw {
+		t.Errorf("GetRaw: got %q, want %q", s.GetRaw(), raw)
+	}
+}
+
+func TestHasPosition(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		wantLat float64
+		wantLon float64
+	}{
+		{"GGA", "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*6F", 35.6550166, 139.68803},
+		{"GLL", "$GPGLL,3539.3010,N,13941.2820,E,092725.00,A,A*6A", 35.6550166, 139.68803},
+		{"RMC", "$GPRMC,092725.00,A,3539.3010,N,13941.2820,E,0.05,220.5,240326,,,A*6C", 35.6550166, 139.68803},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Parse(tt.raw)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			pos, ok := s.(HasPosition)
+			if !ok {
+				t.Fatalf("%s should implement HasPosition", tt.name)
+			}
+			lat, lon := pos.GetPosition()
+			if !almostEqual(lat, tt.wantLat) {
+				t.Errorf("lat: got %f, want %f", lat, tt.wantLat)
+			}
+			if !almostEqual(lon, tt.wantLon) {
+				t.Errorf("lon: got %f, want %f", lon, tt.wantLon)
+			}
+		})
+	}
+}
+
+func TestHasPositionNotImplemented(t *testing.T) {
+	// GSA should NOT implement HasPosition
+	raw := "$GPGSA,A,3,01,03,06,09,12,17,19,22,25,28,,,1.50,0.90,1.20*01"
+	s, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := s.(HasPosition); ok {
+		t.Error("GSA should not implement HasPosition")
+	}
+}
+
+func TestHasTimestamp(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		wantTime string
+	}{
+		{"GGA", "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*6F", "092725.00"},
+		{"GLL", "$GPGLL,3539.3010,N,13941.2820,E,092725.00,A,A*6A", "092725.00"},
+		{"RMC", "$GPRMC,092725.00,A,3539.3010,N,13941.2820,E,0.05,220.5,240326,,,A*6C", "092725.00"},
+		{"ZDA", "$GPZDA,092725.00,24,03,2026,09,00*67", "092725.00"},
+		{"GBS", "$GPGBS,092725.00,1.5,2.0,3.5,17,0.03,1.2,0.8*5A", "092725.00"},
+		{"GST", "$GPGST,092725.00,1.8,3.2,2.1,45.0,1.5,1.2,2.8*6B", "092725.00"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Parse(tt.raw)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			ts, ok := s.(HasTimestamp)
+			if !ok {
+				t.Fatalf("%s should implement HasTimestamp", tt.name)
+			}
+			if ts.GetTimestamp() != tt.wantTime {
+				t.Errorf("GetTimestamp: got %q, want %q", ts.GetTimestamp(), tt.wantTime)
+			}
+		})
+	}
+}
+
+func TestHasSpeed(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		wantSpeed float64
+	}{
+		{"RMC", "$GPRMC,092725.00,A,3539.3010,N,13941.2820,E,0.05,220.5,240326,,,A*6C", 0.05},
+		{"VTG", "$GPVTG,220.5,T,218.3,M,0.05,N,0.09,K,A*22", 0.05},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Parse(tt.raw)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			spd, ok := s.(HasSpeed)
+			if !ok {
+				t.Fatalf("%s should implement HasSpeed", tt.name)
+			}
+			if !almostEqual(spd.GetSpeedKnots(), tt.wantSpeed) {
+				t.Errorf("GetSpeedKnots: got %f, want %f", spd.GetSpeedKnots(), tt.wantSpeed)
+			}
+		})
+	}
+}
+
+// --- Structured error tests ---
+
+func TestChecksumParseError(t *testing.T) {
+	raw := "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*FF"
+	_, err := Parse(raw)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Errorf("expected ErrChecksumMismatch, got %v", err)
+	}
+
+	var pe *ParseError
+	if !errors.As(err, &pe) {
+		t.Fatal("expected *ParseError")
+	}
+	if pe.Kind != ErrChecksum {
+		t.Errorf("expected ErrChecksum kind, got %d", pe.Kind)
+	}
+	if pe.Sentence != raw {
+		t.Errorf("expected sentence %q, got %q", raw, pe.Sentence)
+	}
+}
+
+func TestInvalidFormatParseError(t *testing.T) {
+	_, err := Parse("")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrInvalidSentence) {
+		t.Errorf("expected ErrInvalidSentence, got %v", err)
+	}
+
+	_, err = Parse("GPGGA,1,2,3*00")
+	if !errors.Is(err, ErrInvalidSentence) {
+		t.Errorf("expected ErrInvalidSentence for no prefix, got %v", err)
+	}
+}
+
+func TestUnknownSentenceReturnsBaseSentence(t *testing.T) {
+	// Unknown sentence type should not error, returns *BaseSentence
+	raw := "$GPXYZ,1,2,3*50"
+	s, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.GetType() != "XYZ" {
+		t.Errorf("expected type XYZ, got %q", s.GetType())
+	}
+	if _, ok := s.(*BaseSentence); !ok {
+		t.Errorf("expected *BaseSentence for unknown type, got %T", s)
 	}
 }
