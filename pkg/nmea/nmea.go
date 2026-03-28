@@ -2,9 +2,14 @@
 //
 // Supported sentence types:
 //   - GGA: Global Positioning System Fix Data (position, quality, altitude)
+//   - GLL: Geographic Position - Latitude/Longitude
 //   - RMC: Recommended Minimum Navigation Data (position, velocity, date)
+//   - VTG: Course Over Ground and Ground Speed
 //   - GSA: DOP and Active Satellites
 //   - GSV: Satellites in View (signal strength, elevation, azimuth)
+//   - ZDA: Time and Date
+//   - GBS: GNSS Satellite Fault Detection
+//   - GST: GNSS Pseudorange Error Statistics
 package nmea
 
 import (
@@ -126,6 +131,63 @@ type GSV struct {
 	Satellites []SatelliteInfo // Satellite data (up to 4 per message)
 }
 
+// GLL represents a Geographic Position - Latitude/Longitude sentence.
+type GLL struct {
+	Sentence
+	Latitude  float64 // Decimal degrees (north positive)
+	Longitude float64 // Decimal degrees (east positive)
+	Time      string  // UTC time hhmmss.ss
+	Status    string  // A=Valid, V=Invalid
+	Mode      string  // A=Autonomous, D=Differential, E=Estimated, N=Not valid
+}
+
+// VTG represents a Course Over Ground and Ground Speed sentence.
+type VTG struct {
+	Sentence
+	CourseTrue     float64 // Course over ground (true north, degrees)
+	CourseMag      float64 // Course over ground (magnetic north, degrees)
+	SpeedKnots     float64 // Speed over ground in knots
+	SpeedKmh       float64 // Speed over ground in km/h
+	Mode           string  // A=Autonomous, D=Differential, E=Estimated, N=Not valid
+}
+
+// ZDA represents a Time and Date sentence.
+type ZDA struct {
+	Sentence
+	Time       string // UTC time hhmmss.ss
+	Day        int    // Day (01-31)
+	Month      int    // Month (01-12)
+	Year       int    // Year (4-digit)
+	LocalHours int    // Local zone hours (-13 to +13)
+	LocalMins  int    // Local zone minutes (00-59)
+}
+
+// GBS represents a GNSS Satellite Fault Detection sentence.
+type GBS struct {
+	Sentence
+	Time      string  // UTC time hhmmss.ss
+	ErrLat    float64 // Expected error in latitude (meters, 1-sigma)
+	ErrLon    float64 // Expected error in longitude (meters, 1-sigma)
+	ErrAlt    float64 // Expected error in altitude (meters, 1-sigma)
+	SVID      int     // Satellite ID of most likely failed satellite
+	Prob      float64 // Probability of missed detection
+	Bias      float64 // Estimate of bias on most likely failed satellite (meters)
+	StdDev    float64 // Standard deviation of bias estimate (meters)
+}
+
+// GST represents a GNSS Pseudorange Error Statistics sentence.
+type GST struct {
+	Sentence
+	Time    string  // UTC time hhmmss.ss
+	RangeRMS float64 // RMS value of standard deviation of range inputs (meters)
+	StdMajor float64 // Standard deviation of semi-major axis (meters, 1-sigma)
+	StdMinor float64 // Standard deviation of semi-minor axis (meters, 1-sigma)
+	Orient   float64 // Orientation of semi-major axis (degrees from true north)
+	StdLat   float64 // Standard deviation of latitude error (meters, 1-sigma)
+	StdLon   float64 // Standard deviation of longitude error (meters, 1-sigma)
+	StdAlt   float64 // Standard deviation of altitude error (meters, 1-sigma)
+}
+
 // Parse parses a raw NMEA sentence string and returns the appropriate typed struct.
 func Parse(raw string) (interface{}, error) {
 	s, err := parseSentence(raw)
@@ -136,12 +198,22 @@ func Parse(raw string) (interface{}, error) {
 	switch s.Type {
 	case "GGA":
 		return parseGGA(s)
+	case "GLL":
+		return parseGLL(s)
 	case "RMC":
 		return parseRMC(s)
+	case "VTG":
+		return parseVTG(s)
 	case "GSA":
 		return parseGSA(s)
 	case "GSV":
 		return parseGSV(s)
+	case "ZDA":
+		return parseZDA(s)
+	case "GBS":
+		return parseGBS(s)
+	case "GST":
+		return parseGST(s)
 	default:
 		// Return the base sentence for unsupported types
 		return s, nil
@@ -322,6 +394,107 @@ func parseGSV(s Sentence) (*GSV, error) {
 	}
 
 	return gsv, nil
+}
+
+// parseGLL parses a GLL sentence.
+func parseGLL(s Sentence) (*GLL, error) {
+	if len(s.Fields) < 5 {
+		return nil, fmt.Errorf("GLL requires at least 5 fields, got %d", len(s.Fields))
+	}
+
+	gll := &GLL{Sentence: s}
+	gll.Latitude = parseLatLon(s.Fields[0], s.Fields[1])
+	gll.Longitude = parseLatLon(s.Fields[2], s.Fields[3])
+	gll.Time = s.Fields[4]
+	if len(s.Fields) > 5 {
+		gll.Status = s.Fields[5]
+	}
+	if len(s.Fields) > 6 {
+		gll.Mode = s.Fields[6]
+	}
+
+	return gll, nil
+}
+
+// parseVTG parses a VTG sentence.
+func parseVTG(s Sentence) (*VTG, error) {
+	if len(s.Fields) < 8 {
+		return nil, fmt.Errorf("VTG requires at least 8 fields, got %d", len(s.Fields))
+	}
+
+	vtg := &VTG{Sentence: s}
+	vtg.CourseTrue = parseFloat(s.Fields[0])
+	// Fields[1] = "T" (true)
+	vtg.CourseMag = parseFloat(s.Fields[2])
+	// Fields[3] = "M" (magnetic)
+	vtg.SpeedKnots = parseFloat(s.Fields[4])
+	// Fields[5] = "N" (knots)
+	vtg.SpeedKmh = parseFloat(s.Fields[6])
+	// Fields[7] = "K" (km/h)
+	if len(s.Fields) > 8 {
+		vtg.Mode = s.Fields[8]
+	}
+
+	return vtg, nil
+}
+
+// parseZDA parses a ZDA sentence.
+func parseZDA(s Sentence) (*ZDA, error) {
+	if len(s.Fields) < 4 {
+		return nil, fmt.Errorf("ZDA requires at least 4 fields, got %d", len(s.Fields))
+	}
+
+	zda := &ZDA{Sentence: s}
+	zda.Time = s.Fields[0]
+	zda.Day = parseInt(s.Fields[1])
+	zda.Month = parseInt(s.Fields[2])
+	zda.Year = parseInt(s.Fields[3])
+	if len(s.Fields) > 4 {
+		zda.LocalHours = parseInt(s.Fields[4])
+	}
+	if len(s.Fields) > 5 {
+		zda.LocalMins = parseInt(s.Fields[5])
+	}
+
+	return zda, nil
+}
+
+// parseGBS parses a GBS sentence.
+func parseGBS(s Sentence) (*GBS, error) {
+	if len(s.Fields) < 8 {
+		return nil, fmt.Errorf("GBS requires at least 8 fields, got %d", len(s.Fields))
+	}
+
+	gbs := &GBS{Sentence: s}
+	gbs.Time = s.Fields[0]
+	gbs.ErrLat = parseFloat(s.Fields[1])
+	gbs.ErrLon = parseFloat(s.Fields[2])
+	gbs.ErrAlt = parseFloat(s.Fields[3])
+	gbs.SVID = parseInt(s.Fields[4])
+	gbs.Prob = parseFloat(s.Fields[5])
+	gbs.Bias = parseFloat(s.Fields[6])
+	gbs.StdDev = parseFloat(s.Fields[7])
+
+	return gbs, nil
+}
+
+// parseGST parses a GST sentence.
+func parseGST(s Sentence) (*GST, error) {
+	if len(s.Fields) < 8 {
+		return nil, fmt.Errorf("GST requires at least 8 fields, got %d", len(s.Fields))
+	}
+
+	gst := &GST{Sentence: s}
+	gst.Time = s.Fields[0]
+	gst.RangeRMS = parseFloat(s.Fields[1])
+	gst.StdMajor = parseFloat(s.Fields[2])
+	gst.StdMinor = parseFloat(s.Fields[3])
+	gst.Orient = parseFloat(s.Fields[4])
+	gst.StdLat = parseFloat(s.Fields[5])
+	gst.StdLon = parseFloat(s.Fields[6])
+	gst.StdAlt = parseFloat(s.Fields[7])
+
+	return gst, nil
 }
 
 // --- Helper functions ---

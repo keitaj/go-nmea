@@ -11,7 +11,7 @@ import (
 func main() {
 	var (
 		inputFile  = flag.String("f", "", "Input NMEA log file (default: stdin)")
-		filterType = flag.String("type", "", "Filter by sentence type (GGA, RMC, GSA, GSV)")
+		filterType = flag.String("type", "", "Filter by sentence type (GGA, GLL, RMC, VTG, GSA, GSV, ZDA, GBS, GST)")
 		verbose    = flag.Bool("v", false, "Verbose output: show all fields")
 		showErrors = flag.Bool("errors", false, "Show parse errors")
 	)
@@ -58,6 +58,14 @@ func main() {
 					s.Quality, s.NumSatellites, s.HDOP, s.Altitude)
 			}
 
+		case *nmea.GLL:
+			stats.gll++
+			if *filterType != "" && *filterType != "GLL" {
+				return
+			}
+			fmt.Printf("[%s] GLL | %s | Lat:%.6f Lon:%.6f | Status:%s\n",
+				s.Talker, s.Time, s.Latitude, s.Longitude, s.Status)
+
 		case *nmea.RMC:
 			stats.rmc++
 			if *filterType != "" && *filterType != "RMC" {
@@ -65,6 +73,14 @@ func main() {
 			}
 			fmt.Printf("[%s] RMC | %s | %s | Lat:%.6f Lon:%.6f | Spd:%.1fkn | Crs:%.1f°\n",
 				s.Talker, s.Time, s.Date, s.Latitude, s.Longitude, s.Speed, s.Course)
+
+		case *nmea.VTG:
+			stats.vtg++
+			if *filterType != "" && *filterType != "VTG" {
+				return
+			}
+			fmt.Printf("[%s] VTG | CrsT:%.1f° CrsM:%.1f° | Spd:%.1fkn %.1fkm/h\n",
+				s.Talker, s.CourseTrue, s.CourseMag, s.SpeedKnots, s.SpeedKmh)
 
 		case *nmea.GSA:
 			stats.gsa++
@@ -93,6 +109,30 @@ func main() {
 				}
 			}
 			fmt.Println()
+
+		case *nmea.ZDA:
+			stats.zda++
+			if *filterType != "" && *filterType != "ZDA" {
+				return
+			}
+			fmt.Printf("[%s] ZDA | %s | %04d-%02d-%02d | TZ:%+03d:%02d\n",
+				s.Talker, s.Time, s.Year, s.Month, s.Day, s.LocalHours, s.LocalMins)
+
+		case *nmea.GBS:
+			stats.gbs++
+			if *filterType != "" && *filterType != "GBS" {
+				return
+			}
+			fmt.Printf("[%s] GBS | %s | ErrLat:%.2fm ErrLon:%.2fm ErrAlt:%.2fm | FailSV:%d Bias:%.2fm\n",
+				s.Talker, s.Time, s.ErrLat, s.ErrLon, s.ErrAlt, s.SVID, s.Bias)
+
+		case *nmea.GST:
+			stats.gst++
+			if *filterType != "" && *filterType != "GST" {
+				return
+			}
+			fmt.Printf("[%s] GST | %s | RMS:%.2fm | σLat:%.2fm σLon:%.2fm σAlt:%.2fm\n",
+				s.Talker, s.Time, s.RangeRMS, s.StdLat, s.StdLon, s.StdAlt)
 
 		default:
 			stats.other++
@@ -123,12 +163,12 @@ func main() {
 
 	// Print summary
 	fmt.Fprintf(os.Stderr, "\n--- Summary ---\n")
-	fmt.Fprintf(os.Stderr, "Total: %d | GGA: %d | RMC: %d | GSA: %d | GSV: %d | Other: %d | Errors: %d\n",
-		stats.total, stats.gga, stats.rmc, stats.gsa, stats.gsv, stats.other, stats.errors)
+	fmt.Fprintf(os.Stderr, "Total: %d | GGA: %d | GLL: %d | RMC: %d | VTG: %d | GSA: %d | GSV: %d | ZDA: %d | GBS: %d | GST: %d | Other: %d | Errors: %d\n",
+		stats.total, stats.gga, stats.gll, stats.rmc, stats.vtg, stats.gsa, stats.gsv, stats.zda, stats.gbs, stats.gst, stats.other, stats.errors)
 }
 
 type parseStats struct {
-	total, gga, rmc, gsa, gsv, other, errors int
+	total, gga, gll, rmc, vtg, gsa, gsv, zda, gbs, gst, other, errors int
 }
 
 func printGGAVerbose(g *nmea.GGA) {
