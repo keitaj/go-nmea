@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -41,7 +42,7 @@ func main() {
 	reader := nmea.NewStreamReader(input)
 	stats := &parseStats{}
 
-	reader.OnParsed(func(sentence interface{}, raw string) {
+	reader.OnParsed(func(sentence nmea.Sentence, raw string) {
 		stats.total++
 
 		switch s := sentence.(type) {
@@ -137,9 +138,7 @@ func main() {
 		default:
 			stats.other++
 			if *filterType == "" {
-				if base, ok := sentence.(nmea.Sentence); ok {
-					fmt.Printf("[%s] %s | (unsupported type)\n", base.Talker, base.Type)
-				}
+				fmt.Printf("[%s] %s | (unsupported type)\n", sentence.GetTalker(), sentence.GetType())
 			}
 		}
 	})
@@ -147,7 +146,19 @@ func main() {
 	if *showErrors {
 		reader.OnError(func(raw string, err error) {
 			stats.errors++
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n  -> %s\n", err, raw)
+			var pe *nmea.ParseError
+			if errors.As(err, &pe) {
+				switch pe.Kind {
+				case nmea.ErrChecksum:
+					fmt.Fprintf(os.Stderr, "CHECKSUM: %v\n  -> %s\n", err, raw)
+				case nmea.ErrFieldCount:
+					fmt.Fprintf(os.Stderr, "FIELDS: %v\n  -> %s\n", err, raw)
+				default:
+					fmt.Fprintf(os.Stderr, "ERROR: %v\n  -> %s\n", err, raw)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "ERROR: %v\n  -> %s\n", err, raw)
+			}
 		})
 	} else {
 		reader.OnError(func(_ string, _ error) {

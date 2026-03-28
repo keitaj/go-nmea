@@ -1,4 +1,4 @@
-.PHONY: test build run clean lint fmt
+.PHONY: test build run clean lint fmt vet
 
 # Build the CLI tool
 build:
@@ -6,7 +6,11 @@ build:
 
 # Run tests
 test:
-	go test -v ./pkg/nmea/...
+	go test -v -race ./pkg/nmea/...
+
+# Run go vet
+vet:
+	go vet ./...
 
 # Run tests with coverage
 cover:
