@@ -1,6 +1,6 @@
 // Package nmea provides a parser for NMEA 0183 sentences commonly used in GNSS receivers.
 //
-// Built-in sentence types: GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST.
+// Built-in sentence types: DTM, GFA, GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST.
 //
 // Custom sentence types can be registered with [RegisterParser]:
 //
@@ -240,6 +240,37 @@ type GRS struct {
 	SignalID  int       // Signal ID (NMEA 4.10+)
 }
 
+// DTM represents a Datum Reference sentence.
+// DTM provides the local datum and offsets from that datum to a reference datum (typically WGS-84).
+type DTM struct {
+	BaseSentence
+	LocalDatum     string  // Local datum code (e.g., "W84", "W72", "P90", "999")
+	Subdivision    string  // Local datum subdivision code (single char, may be empty)
+	LatOffset      float64 // Latitude offset in minutes
+	LatOffsetDir   string  // N or S
+	LonOffset      float64 // Longitude offset in minutes
+	LonOffsetDir   string  // E or W
+	AltOffset      float64 // Altitude offset in meters
+	ReferenceDatum string  // Reference datum code (typically "W84")
+}
+
+// GFA represents a GNSS Fix Accuracy and Integrity sentence (NMEA 4.11).
+// GFA reports protection levels, estimated position errors, and integrity status
+// used in safety-of-life applications.
+type GFA struct {
+	BaseSentence
+	Time      string  // UTC time hhmmss.ss
+	HPL       float64 // Horizontal Protection Level (meters)
+	VPL       float64 // Vertical Protection Level (meters)
+	HEPE      float64 // Horizontal Estimated Position Error, 50th percentile (meters)
+	VEPE      float64 // Vertical Estimated Position Error, 50th percentile (meters)
+	SystemID  int     // GNSS system ID (NMEA 4.11)
+	HAL       float64 // Horizontal Alert Limit (meters)
+	VAL       float64 // Vertical Alert Limit (meters)
+	HEPE99    float64 // Horizontal Estimated Position Error, 99th percentile (meters)
+	Integrity string  // Integrity status: S=Safe, C=Caution, U=Unsafe, V=Not valid
+}
+
 // GST represents a GNSS Pseudorange Error Statistics sentence.
 type GST struct {
 	BaseSentence
@@ -271,6 +302,10 @@ func Parse(raw string) (Sentence, error) {
 	}
 
 	switch s.Type {
+	case "DTM":
+		return parseDTM(s)
+	case "GFA":
+		return parseGFA(s)
 	case "GGA":
 		return parseGGA(s)
 	case "GLL":
@@ -362,6 +397,46 @@ func validateChecksum(body, checksum, raw string) error {
 		return newParseError(ErrChecksum, raw, "checksum mismatch: expected 0x%02X, got 0x%02X", expected, computed)
 	}
 	return nil
+}
+
+// parseDTM parses a DTM sentence.
+func parseDTM(s BaseSentence) (*DTM, error) {
+	if len(s.Fields) < 8 {
+		return nil, newParseError(ErrFieldCount, s.Raw, "DTM requires at least 8 fields, got %d", len(s.Fields))
+	}
+
+	dtm := &DTM{BaseSentence: s}
+	dtm.LocalDatum = s.Fields[0]
+	dtm.Subdivision = s.Fields[1]
+	dtm.LatOffset = ParseFloat(s.Fields[2])
+	dtm.LatOffsetDir = s.Fields[3]
+	dtm.LonOffset = ParseFloat(s.Fields[4])
+	dtm.LonOffsetDir = s.Fields[5]
+	dtm.AltOffset = ParseFloat(s.Fields[6])
+	dtm.ReferenceDatum = s.Fields[7]
+
+	return dtm, nil
+}
+
+// parseGFA parses a GFA sentence.
+func parseGFA(s BaseSentence) (*GFA, error) {
+	if len(s.Fields) < 10 {
+		return nil, newParseError(ErrFieldCount, s.Raw, "GFA requires at least 10 fields, got %d", len(s.Fields))
+	}
+
+	gfa := &GFA{BaseSentence: s}
+	gfa.Time = s.Fields[0]
+	gfa.HPL = ParseFloat(s.Fields[1])
+	gfa.VPL = ParseFloat(s.Fields[2])
+	gfa.HEPE = ParseFloat(s.Fields[3])
+	gfa.VEPE = ParseFloat(s.Fields[4])
+	gfa.SystemID = ParseInt(s.Fields[5])
+	gfa.HAL = ParseFloat(s.Fields[6])
+	gfa.VAL = ParseFloat(s.Fields[7])
+	gfa.HEPE99 = ParseFloat(s.Fields[8])
+	gfa.Integrity = s.Fields[9]
+
+	return gfa, nil
 }
 
 // parseGGA parses a GGA sentence.

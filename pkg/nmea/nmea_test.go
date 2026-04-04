@@ -622,6 +622,129 @@ func TestParseGRS_NMEA410(t *testing.T) {
 	}
 }
 
+func TestParseDTM(t *testing.T) {
+	raw := "$GPDTM,W84,,0.0,N,0.0,E,0.0,W84*6F"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dtm, ok := result.(*DTM)
+	if !ok {
+		t.Fatalf("expected *DTM, got %T", result)
+	}
+
+	if dtm.Talker != TalkerGP {
+		t.Errorf("talker: got %q, want %q", dtm.Talker, TalkerGP)
+	}
+	if dtm.LocalDatum != "W84" {
+		t.Errorf("local datum: got %q, want %q", dtm.LocalDatum, "W84")
+	}
+	if dtm.Subdivision != "" {
+		t.Errorf("subdivision: got %q, want empty", dtm.Subdivision)
+	}
+	if !almostEqual(dtm.LatOffset, 0.0) {
+		t.Errorf("lat offset: got %f, want 0.0", dtm.LatOffset)
+	}
+	if dtm.LatOffsetDir != "N" {
+		t.Errorf("lat dir: got %q, want %q", dtm.LatOffsetDir, "N")
+	}
+	if !almostEqual(dtm.LonOffset, 0.0) {
+		t.Errorf("lon offset: got %f, want 0.0", dtm.LonOffset)
+	}
+	if dtm.LonOffsetDir != "E" {
+		t.Errorf("lon dir: got %q, want %q", dtm.LonOffsetDir, "E")
+	}
+	if !almostEqual(dtm.AltOffset, 0.0) {
+		t.Errorf("alt offset: got %f, want 0.0", dtm.AltOffset)
+	}
+	if dtm.ReferenceDatum != "W84" {
+		t.Errorf("reference datum: got %q, want %q", dtm.ReferenceDatum, "W84")
+	}
+}
+
+func TestParseDTM_WithOffsets(t *testing.T) {
+	raw := "$GPDTM,W72,,0.00,S,0.01,W,2.8,W84*62"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dtm, ok := result.(*DTM)
+	if !ok {
+		t.Fatalf("expected *DTM, got %T", result)
+	}
+
+	if dtm.LocalDatum != "W72" {
+		t.Errorf("local datum: got %q, want %q", dtm.LocalDatum, "W72")
+	}
+	if !almostEqual(dtm.LatOffset, 0.0) {
+		t.Errorf("lat offset: got %f, want 0.0", dtm.LatOffset)
+	}
+	if dtm.LatOffsetDir != "S" {
+		t.Errorf("lat dir: got %q, want %q", dtm.LatOffsetDir, "S")
+	}
+	if !almostEqual(dtm.LonOffset, 0.01) {
+		t.Errorf("lon offset: got %f, want 0.01", dtm.LonOffset)
+	}
+	if dtm.LonOffsetDir != "W" {
+		t.Errorf("lon dir: got %q, want %q", dtm.LonOffsetDir, "W")
+	}
+	if !almostEqual(dtm.AltOffset, 2.8) {
+		t.Errorf("alt offset: got %f, want 2.8", dtm.AltOffset)
+	}
+}
+
+func TestParseGFA(t *testing.T) {
+	raw := "$GNGFA,123519.00,15.2,20.5,3.1,5.4,1,40.0,50.0,8.2,S*2F"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gfa, ok := result.(*GFA)
+	if !ok {
+		t.Fatalf("expected *GFA, got %T", result)
+	}
+
+	if gfa.Talker != TalkerGN {
+		t.Errorf("talker: got %q, want %q", gfa.Talker, TalkerGN)
+	}
+	if gfa.Time != "123519.00" {
+		t.Errorf("time: got %q, want %q", gfa.Time, "123519.00")
+	}
+	if !almostEqual(gfa.HPL, 15.2) {
+		t.Errorf("HPL: got %f, want 15.2", gfa.HPL)
+	}
+	if !almostEqual(gfa.VPL, 20.5) {
+		t.Errorf("VPL: got %f, want 20.5", gfa.VPL)
+	}
+	if !almostEqual(gfa.HEPE, 3.1) {
+		t.Errorf("HEPE: got %f, want 3.1", gfa.HEPE)
+	}
+	if !almostEqual(gfa.VEPE, 5.4) {
+		t.Errorf("VEPE: got %f, want 5.4", gfa.VEPE)
+	}
+	if gfa.SystemID != 1 {
+		t.Errorf("system ID: got %d, want 1", gfa.SystemID)
+	}
+	if !almostEqual(gfa.HAL, 40.0) {
+		t.Errorf("HAL: got %f, want 40.0", gfa.HAL)
+	}
+	if !almostEqual(gfa.VAL, 50.0) {
+		t.Errorf("VAL: got %f, want 50.0", gfa.VAL)
+	}
+	if !almostEqual(gfa.HEPE99, 8.2) {
+		t.Errorf("HEPE99: got %f, want 8.2", gfa.HEPE99)
+	}
+	if gfa.Integrity != "S" {
+		t.Errorf("integrity: got %q, want %q", gfa.Integrity, "S")
+	}
+}
+
 func TestChecksumValidation(t *testing.T) {
 	// Corrupt checksum
 	raw := "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*FF"
@@ -749,6 +872,7 @@ func TestHasTimestamp(t *testing.T) {
 		{"GST", "$GPGST,092725.00,1.8,3.2,2.1,45.0,1.5,1.2,2.8*6B", "092725.00"},
 		{"GNS", "$GPGNS,092725.00,3539.3010,N,13941.2820,E,AN,08,1.03,22.5,39.5,,S*19", "092725.00"},
 		{"GRS", "$GPGRS,092725.00,1,-1.8,-2.7,0.3,,,,,,,,,*64", "092725.00"},
+		{"GFA", "$GPGFA,092725.00,12.0,18.3,2.5,4.8,1,25.0,35.0,6.1,S*3A", "092725.00"},
 	}
 
 	for _, tt := range tests {

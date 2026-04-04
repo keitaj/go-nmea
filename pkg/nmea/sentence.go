@@ -48,6 +48,7 @@ func (g *GBS) GetTimestamp() string { return g.Time }
 func (g *GST) GetTimestamp() string { return g.Time }
 func (g *GNS) GetTimestamp() string { return g.Time }
 func (g *GRS) GetTimestamp() string { return g.Time }
+func (g *GFA) GetTimestamp() string { return g.Time }
 
 // HasSpeed implementations.
 
