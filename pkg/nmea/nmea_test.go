@@ -485,6 +485,143 @@ func TestParseGST(t *testing.T) {
 	}
 }
 
+func TestParseGNS(t *testing.T) {
+	raw := "$GNGNS,014035.00,4332.69262,S,17235.48549,E,RR,13,0.9,25.63,11.24,,,U*09"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gns, ok := result.(*GNS)
+	if !ok {
+		t.Fatalf("expected *GNS, got %T", result)
+	}
+
+	if gns.Talker != TalkerGN {
+		t.Errorf("talker: got %q, want %q", gns.Talker, TalkerGN)
+	}
+	if gns.Time != "014035.00" {
+		t.Errorf("time: got %q, want %q", gns.Time, "014035.00")
+	}
+	// 4332.69262 S = -(43 + 32.69262/60) = -43.54488
+	if !almostEqual(gns.Latitude, -43.54488) {
+		t.Errorf("latitude: got %f, want ~-43.54488", gns.Latitude)
+	}
+	// 17235.48549 E = 172 + 35.48549/60 = 172.59142
+	if !almostEqual(gns.Longitude, 172.59142) {
+		t.Errorf("longitude: got %f, want ~172.59142", gns.Longitude)
+	}
+	if gns.Mode != "RR" {
+		t.Errorf("mode: got %q, want %q", gns.Mode, "RR")
+	}
+	if gns.NumSatellites != 13 {
+		t.Errorf("satellites: got %d, want 13", gns.NumSatellites)
+	}
+	if !almostEqual(gns.HDOP, 0.9) {
+		t.Errorf("HDOP: got %f, want 0.9", gns.HDOP)
+	}
+	if !almostEqual(gns.Altitude, 25.63) {
+		t.Errorf("altitude: got %f, want 25.63", gns.Altitude)
+	}
+	if !almostEqual(gns.GeoidSep, 11.24) {
+		t.Errorf("geoid sep: got %f, want 11.24", gns.GeoidSep)
+	}
+	if gns.NavStatus != "U" {
+		t.Errorf("nav status: got %q, want %q", gns.NavStatus, "U")
+	}
+}
+
+func TestParseGNS_NoNavStatus(t *testing.T) {
+	raw := "$GPGNS,112257.00,3844.24011,N,00908.43828,W,AN,03,10.5,42.1,47.2,5.6,0013*7E"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gns, ok := result.(*GNS)
+	if !ok {
+		t.Fatalf("expected *GNS, got %T", result)
+	}
+
+	if gns.Talker != TalkerGP {
+		t.Errorf("talker: got %q, want %q", gns.Talker, TalkerGP)
+	}
+	if gns.Mode != "AN" {
+		t.Errorf("mode: got %q, want %q", gns.Mode, "AN")
+	}
+	if gns.DGPSStationID != "0013" {
+		t.Errorf("DGPS station: got %q, want %q", gns.DGPSStationID, "0013")
+	}
+	if gns.NavStatus != "" {
+		t.Errorf("nav status: got %q, want empty", gns.NavStatus)
+	}
+}
+
+func TestParseGRS(t *testing.T) {
+	raw := "$GPGRS,024603.00,1,-1.8,-2.7,0.3,,,,,,,,,*6C"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	grs, ok := result.(*GRS)
+	if !ok {
+		t.Fatalf("expected *GRS, got %T", result)
+	}
+
+	if grs.Time != "024603.00" {
+		t.Errorf("time: got %q, want %q", grs.Time, "024603.00")
+	}
+	if grs.Mode != 1 {
+		t.Errorf("mode: got %d, want 1", grs.Mode)
+	}
+	if len(grs.Residuals) != 3 {
+		t.Fatalf("residuals count: got %d, want 3", len(grs.Residuals))
+	}
+	if !almostEqual(grs.Residuals[0], -1.8) {
+		t.Errorf("residual[0]: got %f, want -1.8", grs.Residuals[0])
+	}
+	if !almostEqual(grs.Residuals[1], -2.7) {
+		t.Errorf("residual[1]: got %f, want -2.7", grs.Residuals[1])
+	}
+	if !almostEqual(grs.Residuals[2], 0.3) {
+		t.Errorf("residual[2]: got %f, want 0.3", grs.Residuals[2])
+	}
+}
+
+func TestParseGRS_NMEA410(t *testing.T) {
+	raw := "$GNGRS,174837.00,1,-0.1,0.7,-0.2,0.1,0.3,0.5,-0.7,-0.5,-0.3,0.3,,,1,1*72"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	grs, ok := result.(*GRS)
+	if !ok {
+		t.Fatalf("expected *GRS, got %T", result)
+	}
+
+	if grs.Talker != TalkerGN {
+		t.Errorf("talker: got %q, want %q", grs.Talker, TalkerGN)
+	}
+	if len(grs.Residuals) != 10 {
+		t.Fatalf("residuals count: got %d, want 10", len(grs.Residuals))
+	}
+	if !almostEqual(grs.Residuals[0], -0.1) {
+		t.Errorf("residual[0]: got %f, want -0.1", grs.Residuals[0])
+	}
+	if grs.SystemID != 1 {
+		t.Errorf("system ID: got %d, want 1", grs.SystemID)
+	}
+	if grs.SignalID != 1 {
+		t.Errorf("signal ID: got %d, want 1", grs.SignalID)
+	}
+}
+
 func TestChecksumValidation(t *testing.T) {
 	// Corrupt checksum
 	raw := "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*FF"
@@ -562,6 +699,7 @@ func TestHasPosition(t *testing.T) {
 		{"GGA", "$GPGGA,092725.00,3539.3010,N,13941.2820,E,1,08,1.03,22.5,M,39.5,M,,*6F", 35.6550166, 139.68803},
 		{"GLL", "$GPGLL,3539.3010,N,13941.2820,E,092725.00,A,A*6A", 35.6550166, 139.68803},
 		{"RMC", "$GPRMC,092725.00,A,3539.3010,N,13941.2820,E,0.05,220.5,240326,,,A*6C", 35.6550166, 139.68803},
+		{"GNS", "$GPGNS,092725.00,3539.3010,N,13941.2820,E,AN,08,1.03,22.5,39.5,,S*19", 35.6550166, 139.68803},
 	}
 
 	for _, tt := range tests {
@@ -609,6 +747,8 @@ func TestHasTimestamp(t *testing.T) {
 		{"ZDA", "$GPZDA,092725.00,24,03,2026,09,00*67", "092725.00"},
 		{"GBS", "$GPGBS,092725.00,1.5,2.0,3.5,17,0.03,1.2,0.8*5A", "092725.00"},
 		{"GST", "$GPGST,092725.00,1.8,3.2,2.1,45.0,1.5,1.2,2.8*6B", "092725.00"},
+		{"GNS", "$GPGNS,092725.00,3539.3010,N,13941.2820,E,AN,08,1.03,22.5,39.5,,S*19", "092725.00"},
+		{"GRS", "$GPGRS,092725.00,1,-1.8,-2.7,0.3,,,,,,,,,*64", "092725.00"},
 	}
 
 	for _, tt := range tests {

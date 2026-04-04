@@ -5,11 +5,11 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/keitaj/go-nmea)](https://goreportcard.com/report/github.com/keitaj/go-nmea)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-constellation GNSS receivers (GPS, GLONASS, Galileo, BeiDou, QZSS) and NMEA 4.10/4.11 extensions.
+A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-constellation GNSS receivers (GPS, GLONASS, Galileo, BeiDou, QZSS) with NMEA 4.10/4.11 extensions.
 
 ## Features
 
-- Parse 9 sentence types: GGA, GLL, RMC, VTG, GSA, GSV, ZDA, GBS, GST
+- Parse 11 sentence types: GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST
 - Type-safe `Sentence` interface with functional interfaces (`HasPosition`, `HasTimestamp`, `HasSpeed`)
 - Structured errors with `errors.Is` / `errors.As` support
 - Multi-constellation support (GP, GL, GA, GB, QZ, GN talker IDs)
@@ -137,6 +137,8 @@ cat data.nmea | ./bin/nmea-cli
 |------|-------------|------------|------------|
 | GGA | Fix Data | Position, fix quality, satellites, HDOP, altitude | HasPosition, HasTimestamp |
 | GLL | Geographic Position | Position, status | HasPosition, HasTimestamp |
+| GNS | GNSS Fix Data | Position, per-system mode indicators, NavStatus (4.10+) | HasPosition, HasTimestamp |
+| GRS | Range Residuals | Per-satellite range residuals, SystemID/SignalID (4.10+) | HasTimestamp |
 | RMC | Recommended Minimum | Position, speed, course, date/time | HasPosition, HasTimestamp, HasSpeed |
 | VTG | Course & Speed | True/magnetic course, speed (kn/kmh) | HasSpeed |
 | GSA | Active Satellites | Fix mode (2D/3D), satellite IDs, PDOP/HDOP/VDOP, SystemID (4.10+) | — |
@@ -160,6 +162,8 @@ cat data.nmea | ./bin/nmea-cli
 
 This library supports modern NMEA protocol extensions:
 
+- **GNS NavStatus** — Navigational status indicator (Safe, Caution, Unsafe, Not valid)
+- **GRS SystemID/SignalID** — Per-constellation and per-signal range residuals
 - **GSA SystemID** — Identifies the GNSS constellation per sentence, enabling per-system DOP tracking
 - **GSV SignalID** — Identifies signal types for multi-frequency receivers (e.g., L1 C/A, L2C, L5)
 - **SystemID constants** — GPS (1), GLONASS (2), Galileo (3), BeiDou (4), QZSS (5), NavIC (6), SBAS (7)

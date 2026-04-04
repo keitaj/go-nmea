@@ -1,6 +1,6 @@
 // Package nmea provides a parser for NMEA 0183 sentences commonly used in GNSS receivers.
 //
-// Built-in sentence types: GGA, GLL, RMC, VTG, GSA, GSV, ZDA, GBS, GST.
+// Built-in sentence types: GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST.
 //
 // Custom sentence types can be registered with [RegisterParser]:
 //
@@ -210,6 +210,36 @@ type GBS struct {
 	StdDev float64 // Standard deviation of bias estimate (meters)
 }
 
+// GNS represents a GNSS Fix Data sentence.
+// GNS is a multi-constellation extension of GGA, providing a per-system mode indicator
+// instead of a single fix quality value.
+type GNS struct {
+	BaseSentence
+	Time          string  // UTC time hhmmss.ss
+	Latitude      float64 // Decimal degrees (north positive)
+	Longitude     float64 // Decimal degrees (east positive)
+	Mode          string  // Mode indicator (one char per constellation: N/A/D/P/R/F/E/M/S)
+	NumSatellites int     // Total number of satellites in use
+	HDOP          float64 // Horizontal dilution of precision
+	Altitude      float64 // Altitude above mean sea level (meters)
+	GeoidSep      float64 // Geoidal separation (meters)
+	DGPSAge       float64 // Age of differential data (seconds)
+	DGPSStationID string  // Differential reference station ID
+	NavStatus     string  // Navigational status (NMEA 4.10+): S=Safe, C=Caution, U=Unsafe, V=Not valid
+}
+
+// GRS represents a GNSS Range Residuals sentence.
+// GRS provides range residuals for satellites used in the navigation solution.
+// The order of residuals matches the satellite order in the most recent GSA sentence.
+type GRS struct {
+	BaseSentence
+	Time      string    // UTC time hhmmss.ss
+	Mode      int       // 0=residuals used in solution, 1=recomputed after solution
+	Residuals []float64 // Range residuals in meters (up to 12)
+	SystemID  int       // GNSS system ID (NMEA 4.10+)
+	SignalID  int       // Signal ID (NMEA 4.10+)
+}
+
 // GST represents a GNSS Pseudorange Error Statistics sentence.
 type GST struct {
 	BaseSentence
@@ -257,6 +287,10 @@ func Parse(raw string) (Sentence, error) {
 		return parseZDA(s)
 	case "GBS":
 		return parseGBS(s)
+	case "GNS":
+		return parseGNS(s)
+	case "GRS":
+		return parseGRS(s)
 	case "GST":
 		return parseGST(s)
 	default:
@@ -553,6 +587,58 @@ func parseGST(s BaseSentence) (*GST, error) {
 	gst.StdAlt = ParseFloat(s.Fields[7])
 
 	return gst, nil
+}
+
+// parseGNS parses a GNS sentence.
+func parseGNS(s BaseSentence) (*GNS, error) {
+	if len(s.Fields) < 12 {
+		return nil, newParseError(ErrFieldCount, s.Raw, "GNS requires at least 12 fields, got %d", len(s.Fields))
+	}
+
+	gns := &GNS{BaseSentence: s}
+	gns.Time = s.Fields[0]
+	gns.Latitude = ParseLatLon(s.Fields[1], s.Fields[2])
+	gns.Longitude = ParseLatLon(s.Fields[3], s.Fields[4])
+	gns.Mode = s.Fields[5]
+	gns.NumSatellites = ParseInt(s.Fields[6])
+	gns.HDOP = ParseFloat(s.Fields[7])
+	gns.Altitude = ParseFloat(s.Fields[8])
+	gns.GeoidSep = ParseFloat(s.Fields[9])
+	gns.DGPSAge = ParseFloat(s.Fields[10])
+	gns.DGPSStationID = s.Fields[11]
+	if len(s.Fields) > 12 {
+		gns.NavStatus = s.Fields[12]
+	}
+
+	return gns, nil
+}
+
+// parseGRS parses a GRS sentence.
+func parseGRS(s BaseSentence) (*GRS, error) {
+	if len(s.Fields) < 14 {
+		return nil, newParseError(ErrFieldCount, s.Raw, "GRS requires at least 14 fields, got %d", len(s.Fields))
+	}
+
+	grs := &GRS{BaseSentence: s}
+	grs.Time = s.Fields[0]
+	grs.Mode = ParseInt(s.Fields[1])
+
+	// 12 residual fields (fields 2-13), empty fields are normal
+	for i := 2; i < 14; i++ {
+		if s.Fields[i] != "" {
+			grs.Residuals = append(grs.Residuals, ParseFloat(s.Fields[i]))
+		}
+	}
+
+	// NMEA 4.10+: SystemID and SignalID
+	if len(s.Fields) > 14 {
+		grs.SystemID = ParseInt(s.Fields[14])
+	}
+	if len(s.Fields) > 15 {
+		grs.SignalID = ParseInt(s.Fields[15])
+	}
+
+	return grs, nil
 }
 
 // --- Helper functions ---

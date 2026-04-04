@@ -36,6 +36,7 @@ func (s BaseSentence) GetRaw() string      { return s.Raw }
 func (g *GGA) GetPosition() (float64, float64) { return g.Latitude, g.Longitude }
 func (g *GLL) GetPosition() (float64, float64) { return g.Latitude, g.Longitude }
 func (r *RMC) GetPosition() (float64, float64) { return r.Latitude, r.Longitude }
+func (g *GNS) GetPosition() (float64, float64) { return g.Latitude, g.Longitude }
 
 // HasTimestamp implementations.
 
@@ -45,6 +46,8 @@ func (r *RMC) GetTimestamp() string { return r.Time }
 func (z *ZDA) GetTimestamp() string { return z.Time }
 func (g *GBS) GetTimestamp() string { return g.Time }
 func (g *GST) GetTimestamp() string { return g.Time }
+func (g *GNS) GetTimestamp() string { return g.Time }
+func (g *GRS) GetTimestamp() string { return g.Time }
 
 // HasSpeed implementations.
 
