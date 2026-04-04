@@ -53,6 +53,16 @@ const (
 	TalkerQZ TalkerID = "QZ" // QZSS (Michibiki)
 )
 
+// SystemID constants for NMEA 4.10+ GSA/GSV sentences.
+const (
+	SystemIDGPS     = 1 // GPS
+	SystemIDGLONASS = 2 // GLONASS
+	SystemIDGalileo = 3 // Galileo
+	SystemIDBeiDou  = 4 // BeiDou
+	SystemIDQZSS    = 5 // QZSS
+	SystemIDNavIC   = 6 // NavIC (IRNSS)
+)
+
 // FixQuality represents the GPS fix quality indicator in GGA sentences.
 type FixQuality int
 
@@ -152,6 +162,7 @@ type GSV struct {
 	MsgNum     int             // Current message number
 	TotalSats  int             // Total satellites in view
 	Satellites []SatelliteInfo // Satellite data (up to 4 per message)
+	SignalID   int             // Signal ID (NMEA 4.10+), 0 if not present
 }
 
 // GLL represents a Geographic Position - Latitude/Longitude sentence.
@@ -402,6 +413,7 @@ func parseGSA(s BaseSentence) (*GSA, error) {
 }
 
 // parseGSV parses a GSV sentence.
+// NMEA 4.10+ adds a SignalID as the last field after satellite data.
 func parseGSV(s BaseSentence) (*GSV, error) {
 	if len(s.Fields) < 3 {
 		return nil, newParseError(ErrFieldCount, s.Raw, "GSV requires at least 3 fields, got %d", len(s.Fields))
@@ -412,8 +424,20 @@ func parseGSV(s BaseSentence) (*GSV, error) {
 	gsv.MsgNum = ParseInt(s.Fields[1])
 	gsv.TotalSats = ParseInt(s.Fields[2])
 
+	// Determine if the last field is a SignalID (NMEA 4.10+).
+	// After the 3 header fields, satellite data comes in groups of 4.
+	// If (remaining fields - 1) is divisible by 4, the last field is SignalID.
+	remaining := len(s.Fields) - 3
+	hasSignalID := remaining > 0 && remaining%4 == 1
+
+	satEnd := len(s.Fields)
+	if hasSignalID {
+		gsv.SignalID = ParseInt(s.Fields[len(s.Fields)-1])
+		satEnd--
+	}
+
 	// Each satellite takes 4 fields: SVID, elevation, azimuth, SNR
-	for i := 3; i+3 < len(s.Fields); i += 4 {
+	for i := 3; i+3 < satEnd; i += 4 {
 		sat := SatelliteInfo{
 			SVID:      ParseInt(s.Fields[i]),
 			Elevation: ParseInt(s.Fields[i+1]),

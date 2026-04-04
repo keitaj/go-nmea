@@ -169,6 +169,129 @@ func TestParseGSV(t *testing.T) {
 	}
 }
 
+func TestParseGSV_NMEA410_SignalID(t *testing.T) {
+	// Galileo GSV with SignalID=1 (NMEA 4.10+)
+	raw := "$GAGSV,3,1,09,02,40,083,42,05,55,220,47,07,25,315,35,13,72,010,44,1*74"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gsv, ok := result.(*GSV)
+	if !ok {
+		t.Fatalf("expected *GSV, got %T", result)
+	}
+
+	if gsv.TotalMsgs != 3 {
+		t.Errorf("total msgs: got %d, want 3", gsv.TotalMsgs)
+	}
+	if gsv.TotalSats != 9 {
+		t.Errorf("total sats: got %d, want 9", gsv.TotalSats)
+	}
+	if len(gsv.Satellites) != 4 {
+		t.Fatalf("satellites: got %d, want 4", len(gsv.Satellites))
+	}
+	if gsv.SignalID != 1 {
+		t.Errorf("signal ID: got %d, want 1", gsv.SignalID)
+	}
+	if gsv.Talker != TalkerGA {
+		t.Errorf("talker: got %q, want %q", gsv.Talker, TalkerGA)
+	}
+
+	// Verify satellite data is not corrupted by SignalID parsing
+	sat := gsv.Satellites[3]
+	if sat.SVID != 13 {
+		t.Errorf("sat[3] SVID: got %d, want 13", sat.SVID)
+	}
+	if sat.SNR != 44 {
+		t.Errorf("sat[3] SNR: got %d, want 44", sat.SNR)
+	}
+}
+
+func TestParseGSV_NMEA410_SignalID_PartialSats(t *testing.T) {
+	// GSV with 2 satellites + SignalID (last message of a multi-message sequence)
+	raw := "$GAGSV,3,3,09,30,15,180,30,36,05,090,25,1*7F"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gsv, ok := result.(*GSV)
+	if !ok {
+		t.Fatalf("expected *GSV, got %T", result)
+	}
+
+	if len(gsv.Satellites) != 2 {
+		t.Fatalf("satellites: got %d, want 2", len(gsv.Satellites))
+	}
+	if gsv.SignalID != 1 {
+		t.Errorf("signal ID: got %d, want 1", gsv.SignalID)
+	}
+	if gsv.Satellites[0].SVID != 30 {
+		t.Errorf("sat[0] SVID: got %d, want 30", gsv.Satellites[0].SVID)
+	}
+}
+
+func TestParseGSV_NoSignalID(t *testing.T) {
+	// Standard GSV without SignalID - SignalID should be 0
+	raw := "$GPGSV,3,1,12,01,40,083,42,03,55,220,47,06,25,315,35,09,72,010,44*7D"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gsv := result.(*GSV)
+	if gsv.SignalID != 0 {
+		t.Errorf("signal ID: got %d, want 0 (no NMEA 4.10+ SignalID)", gsv.SignalID)
+	}
+	if len(gsv.Satellites) != 4 {
+		t.Errorf("satellites: got %d, want 4", len(gsv.Satellites))
+	}
+}
+
+func TestParseGSA_NMEA410_SystemID(t *testing.T) {
+	// Galileo GSA with SystemID=2 (NMEA 4.10+)
+	raw := "$GAGSA,A,3,02,05,07,13,15,21,,,,,,,2.10,1.00,1.80,2*03"
+
+	result, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gsa, ok := result.(*GSA)
+	if !ok {
+		t.Fatalf("expected *GSA, got %T", result)
+	}
+
+	if gsa.SystemID != 2 {
+		t.Errorf("system ID: got %d, want 2", gsa.SystemID)
+	}
+	if gsa.FixType != 3 {
+		t.Errorf("fix type: got %d, want 3", gsa.FixType)
+	}
+	if !almostEqual(gsa.PDOP, 2.10) {
+		t.Errorf("PDOP: got %f, want 2.10", gsa.PDOP)
+	}
+	if !almostEqual(gsa.HDOP, 1.00) {
+		t.Errorf("HDOP: got %f, want 1.00", gsa.HDOP)
+	}
+	if !almostEqual(gsa.VDOP, 1.80) {
+		t.Errorf("VDOP: got %f, want 1.80", gsa.VDOP)
+	}
+	wantSVIDs := []int{2, 5, 7, 13, 15, 21}
+	if len(gsa.SVIDs) != len(wantSVIDs) {
+		t.Fatalf("SVIDs count: got %d, want %d", len(gsa.SVIDs), len(wantSVIDs))
+	}
+	for i, id := range wantSVIDs {
+		if gsa.SVIDs[i] != id {
+			t.Errorf("SVIDs[%d]: got %d, want %d", i, gsa.SVIDs[i], id)
+		}
+	}
+}
+
 func TestParseQZSS(t *testing.T) {
 	// QZSS (Michibiki) GGA sentence
 	raw := "$QZGGA,092725.00,3539.3010,N,13941.2820,E,1,04,1.50,22.5,M,39.5,M,,*79"
