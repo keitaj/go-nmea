@@ -1,4 +1,5 @@
 bin/
+nmea-cli
 coverage.out
 coverage.html
 *.exe
