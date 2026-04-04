@@ -578,8 +578,8 @@ func TestParseGRS(t *testing.T) {
 	if grs.Mode != 1 {
 		t.Errorf("mode: got %d, want 1", grs.Mode)
 	}
-	if len(grs.Residuals) != 3 {
-		t.Fatalf("residuals count: got %d, want 3", len(grs.Residuals))
+	if len(grs.Residuals) != 12 {
+		t.Fatalf("residuals count: got %d, want 12", len(grs.Residuals))
 	}
 	if !almostEqual(grs.Residuals[0], -1.8) {
 		t.Errorf("residual[0]: got %f, want -1.8", grs.Residuals[0])
@@ -589,6 +589,12 @@ func TestParseGRS(t *testing.T) {
 	}
 	if !almostEqual(grs.Residuals[2], 0.3) {
 		t.Errorf("residual[2]: got %f, want 0.3", grs.Residuals[2])
+	}
+	// Remaining slots should be 0 (empty fields)
+	for i := 3; i < 12; i++ {
+		if grs.Residuals[i] != 0 {
+			t.Errorf("residual[%d]: got %f, want 0", i, grs.Residuals[i])
+		}
 	}
 }
 
@@ -608,8 +614,8 @@ func TestParseGRS_NMEA410(t *testing.T) {
 	if grs.Talker != TalkerGN {
 		t.Errorf("talker: got %q, want %q", grs.Talker, TalkerGN)
 	}
-	if len(grs.Residuals) != 10 {
-		t.Fatalf("residuals count: got %d, want 10", len(grs.Residuals))
+	if len(grs.Residuals) != 12 {
+		t.Fatalf("residuals count: got %d, want 12", len(grs.Residuals))
 	}
 	if !almostEqual(grs.Residuals[0], -0.1) {
 		t.Errorf("residual[0]: got %f, want -0.1", grs.Residuals[0])
