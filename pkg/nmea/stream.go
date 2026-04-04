@@ -12,17 +12,23 @@ type Handler func(sentence Sentence, raw string)
 // ErrorHandler is called when a sentence fails to parse.
 type ErrorHandler func(raw string, err error)
 
+// MaxLineLength is the maximum number of bytes read per line.
+// NMEA 0183 specifies 82 characters max; 1024 provides generous headroom.
+const MaxLineLength = 1024
+
 // StreamReader reads NMEA sentences from an io.Reader and dispatches them.
 type StreamReader struct {
-	reader   *bufio.Reader
+	scanner  *bufio.Scanner
 	onParsed Handler
 	onError  ErrorHandler
 }
 
 // NewStreamReader creates a new NMEA stream reader.
 func NewStreamReader(r io.Reader) *StreamReader {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, MaxLineLength), MaxLineLength)
 	return &StreamReader{
-		reader: bufio.NewReader(r),
+		scanner: sc,
 	}
 }
 
@@ -40,30 +46,25 @@ func (sr *StreamReader) OnError(h ErrorHandler) {
 // Returns the total number of sentences processed and any I/O error.
 func (sr *StreamReader) ReadAll() (int, error) {
 	count := 0
-	for {
-		line, err := sr.reader.ReadString('\n')
-		if len(line) > 0 {
-			// Only process lines that look like NMEA sentences
-			trimmed := trimLine(line)
-			if len(trimmed) > 0 && (trimmed[0] == '$' || trimmed[0] == '!') {
-				count++
-				parsed, parseErr := Parse(trimmed)
-				if parseErr != nil {
-					if sr.onError != nil {
-						sr.onError(trimmed, parseErr)
-					}
-				} else if sr.onParsed != nil {
-					sr.onParsed(parsed, trimmed)
+	for sr.scanner.Scan() {
+		line := sr.scanner.Text()
+		trimmed := trimLine(line)
+		if len(trimmed) > 0 && (trimmed[0] == '$' || trimmed[0] == '!') {
+			count++
+			parsed, parseErr := Parse(trimmed)
+			if parseErr != nil {
+				if sr.onError != nil {
+					sr.onError(trimmed, parseErr)
 				}
+			} else if sr.onParsed != nil {
+				sr.onParsed(parsed, trimmed)
 			}
 		}
-		if err == io.EOF {
-			return count, nil
-		}
-		if err != nil {
-			return count, fmt.Errorf("read error: %w", err)
-		}
 	}
+	if err := sr.scanner.Err(); err != nil {
+		return count, fmt.Errorf("read error: %w", err)
+	}
+	return count, nil
 }
 
 func trimLine(s string) string {
