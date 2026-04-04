@@ -244,14 +244,14 @@ type GRS struct {
 // DTM provides the local datum and offsets from that datum to a reference datum (typically WGS-84).
 type DTM struct {
 	BaseSentence
-	LocalDatum    string  // Local datum code (e.g., "W84", "W72", "P90", "999")
-	Subdivision   string  // Local datum subdivision code (single char, may be empty)
-	LatOffset     float64 // Latitude offset in minutes
-	LatOffsetDir  string  // N or S
-	LonOffset     float64 // Longitude offset in minutes
-	LonOffsetDir  string  // E or W
-	AltOffset     float64 // Altitude offset in meters
-	ReferenceDatum string // Reference datum code (typically "W84")
+	LocalDatum     string  // Local datum code (e.g., "W84", "W72", "P90", "999")
+	Subdivision    string  // Local datum subdivision code (single char, may be empty)
+	LatOffset      float64 // Latitude offset in minutes
+	LatOffsetDir   string  // N or S
+	LonOffset      float64 // Longitude offset in minutes
+	LonOffsetDir   string  // E or W
+	AltOffset      float64 // Altitude offset in meters
+	ReferenceDatum string  // Reference datum code (typically "W84")
 }
 
 // GFA represents a GNSS Fix Accuracy and Integrity sentence (NMEA 4.11).
