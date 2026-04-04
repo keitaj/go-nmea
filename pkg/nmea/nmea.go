@@ -53,7 +53,7 @@ const (
 	TalkerQZ TalkerID = "QZ" // QZSS (Michibiki)
 )
 
-// SystemID constants for NMEA 4.10+ GSA/GSV sentences.
+// SystemID constants for NMEA 4.10+/4.11 GSA/GSV sentences.
 const (
 	SystemIDGPS     = 1 // GPS
 	SystemIDGLONASS = 2 // GLONASS
@@ -61,6 +61,7 @@ const (
 	SystemIDBeiDou  = 4 // BeiDou
 	SystemIDQZSS    = 5 // QZSS
 	SystemIDNavIC   = 6 // NavIC (IRNSS)
+	SystemIDSBAS    = 7 // SBAS (WAAS/EGNOS/MSAS, NMEA 4.11)
 )
 
 // FixQuality represents the GPS fix quality indicator in GGA sentences.
