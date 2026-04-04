@@ -79,19 +79,20 @@ const (
 	FixSimulation FixQuality = 8
 )
 
+var fixQualityNames = map[FixQuality]string{
+	FixInvalid:    "Invalid",
+	FixGPS:        "GPS",
+	FixDGPS:       "DGPS",
+	FixPPS:        "PPS",
+	FixRTKFixed:   "RTK Fixed",
+	FixRTKFloat:   "RTK Float",
+	FixEstimated:  "Estimated",
+	FixManual:     "Manual",
+	FixSimulation: "Simulation",
+}
+
 func (f FixQuality) String() string {
-	names := map[FixQuality]string{
-		FixInvalid:    "Invalid",
-		FixGPS:        "GPS",
-		FixDGPS:       "DGPS",
-		FixPPS:        "PPS",
-		FixRTKFixed:   "RTK Fixed",
-		FixRTKFloat:   "RTK Float",
-		FixEstimated:  "Estimated",
-		FixManual:     "Manual",
-		FixSimulation: "Simulation",
-	}
-	if name, ok := names[f]; ok {
+	if name, ok := fixQualityNames[f]; ok {
 		return name
 	}
 	return fmt.Sprintf("Unknown(%d)", int(f))
