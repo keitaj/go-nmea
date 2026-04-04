@@ -698,11 +698,11 @@ func parseGRS(s BaseSentence) (*GRS, error) {
 	grs.Time = s.Fields[0]
 	grs.Mode = ParseInt(s.Fields[1])
 
-	// 12 residual fields (fields 2-13), empty fields are normal
-	for i := 2; i < 14; i++ {
-		if s.Fields[i] != "" {
-			grs.Residuals = append(grs.Residuals, ParseFloat(s.Fields[i]))
-		}
+	// 12 residual fields (fields 2-13), always fixed-length to preserve
+	// index correspondence with satellite order in the most recent GSA sentence.
+	grs.Residuals = make([]float64, 12)
+	for i := 0; i < 12; i++ {
+		grs.Residuals[i] = ParseFloat(s.Fields[i+2])
 	}
 
 	// NMEA 4.10+: SystemID and SignalID
