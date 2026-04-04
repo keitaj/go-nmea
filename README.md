@@ -10,6 +10,8 @@ A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-co
 - Type-safe `Sentence` interface with functional interfaces (`HasPosition`, `HasTimestamp`, `HasSpeed`)
 - Structured errors with `errors.Is` / `errors.As` support
 - Multi-constellation support (GP, GL, GA, GB, QZ, GN talker IDs)
+- NMEA 4.10/4.11 extensions (GSV SignalID, GSA SystemID, SBAS)
+- Custom parser registration for proprietary sentence types
 - Checksum validation
 - Stream reader for continuous data (serial ports, log files)
 - CLI tool for NMEA log analysis
@@ -134,8 +136,8 @@ cat data.nmea | ./bin/nmea-cli
 | GLL | Geographic Position | Position, status | HasPosition, HasTimestamp |
 | RMC | Recommended Minimum | Position, speed, course, date/time | HasPosition, HasTimestamp, HasSpeed |
 | VTG | Course & Speed | True/magnetic course, speed (kn/kmh) | HasSpeed |
-| GSA | Active Satellites | Fix mode (2D/3D), satellite IDs, PDOP/HDOP/VDOP | — |
-| GSV | Satellites in View | Satellite elevation, azimuth, SNR | — |
+| GSA | Active Satellites | Fix mode (2D/3D), satellite IDs, PDOP/HDOP/VDOP, SystemID (4.10+) | — |
+| GSV | Satellites in View | Satellite elevation, azimuth, SNR, SignalID (4.10+) | — |
 | ZDA | Time and Date | UTC time, date, timezone offset | HasTimestamp |
 | GBS | Fault Detection | Position errors, failed satellite ID, bias | HasTimestamp |
 | GST | Error Statistics | RMS, error ellipse, lat/lon/alt std dev | HasTimestamp |
@@ -150,6 +152,16 @@ cat data.nmea | ./bin/nmea-cli
 | GB | BeiDou (China) |
 | QZ | QZSS / Michibiki (Japan) |
 | GN | Multi-constellation |
+
+## NMEA 4.10/4.11 Extensions
+
+This library supports modern NMEA protocol extensions:
+
+- **GSA SystemID** — Identifies the GNSS constellation per sentence, enabling per-system DOP tracking
+- **GSV SignalID** — Identifies signal types for multi-frequency receivers (e.g., L1 C/A, L2C, L5)
+- **SystemID constants** — GPS (1), GLONASS (2), Galileo (3), BeiDou (4), QZSS (5), NavIC (6), SBAS (7)
+
+These fields are backward compatible — they default to zero when not present in standard NMEA sentences.
 
 ## License
 
