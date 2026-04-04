@@ -9,7 +9,7 @@ A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-co
 
 ## Features
 
-- Parse 11 sentence types: GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST
+- Parse 13 sentence types: DTM, GFA, GGA, GLL, GNS, GRS, RMC, VTG, GSA, GSV, ZDA, GBS, GST
 - Type-safe `Sentence` interface with functional interfaces (`HasPosition`, `HasTimestamp`, `HasSpeed`)
 - Structured errors with `errors.Is` / `errors.As` support
 - Multi-constellation support (GP, GL, GA, GB, QZ, GN talker IDs)
@@ -135,6 +135,8 @@ cat data.nmea | ./bin/nmea-cli
 
 | Type | Description | Key Fields | Interfaces |
 |------|-------------|------------|------------|
+| DTM | Datum Reference | Local datum, lat/lon/alt offsets, reference datum | — |
+| GFA | Fix Accuracy & Integrity | Protection levels (HPL/VPL), position errors, integrity status (4.11) | HasTimestamp |
 | GGA | Fix Data | Position, fix quality, satellites, HDOP, altitude | HasPosition, HasTimestamp |
 | GLL | Geographic Position | Position, status | HasPosition, HasTimestamp |
 | GNS | GNSS Fix Data | Position, per-system mode indicators, NavStatus (4.10+) | HasPosition, HasTimestamp |
@@ -162,6 +164,7 @@ cat data.nmea | ./bin/nmea-cli
 
 This library supports modern NMEA protocol extensions:
 
+- **GFA Integrity** — Protection levels, alert limits, and integrity status for safety-of-life applications
 - **GNS NavStatus** — Navigational status indicator (Safe, Caution, Unsafe, Not valid)
 - **GRS SystemID/SignalID** — Per-constellation and per-signal range residuals
 - **GSA SystemID** — Identifies the GNSS constellation per sentence, enabling per-system DOP tracking
