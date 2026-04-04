@@ -1,8 +1,11 @@
 # go-nmea
 
 [![CI](https://github.com/keitaj/go-nmea/actions/workflows/ci.yml/badge.svg)](https://github.com/keitaj/go-nmea/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/keitaj/go-nmea.svg)](https://pkg.go.dev/github.com/keitaj/go-nmea)
+[![Go Report Card](https://goreportcard.com/badge/github.com/keitaj/go-nmea)](https://goreportcard.com/report/github.com/keitaj/go-nmea)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-constellation GNSS receivers (GPS, GLONASS, Galileo, BeiDou, QZSS).
+A lightweight, zero-dependency NMEA 0183 parser written in Go. Supports multi-constellation GNSS receivers (GPS, GLONASS, Galileo, BeiDou, QZSS) and NMEA 4.10/4.11 extensions.
 
 ## Features
 
