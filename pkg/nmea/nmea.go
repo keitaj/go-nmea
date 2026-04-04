@@ -559,6 +559,8 @@ func parseGST(s BaseSentence) (*GST, error) {
 // These are exported for use by custom parser implementations.
 
 // ParseLatLon converts NMEA lat/lon format (ddmm.mmmm) to decimal degrees.
+// Returns 0 if value or direction is empty, or if the format is invalid.
+// Empty fields are normal in NMEA when a fix is not yet available.
 func ParseLatLon(value, direction string) float64 {
 	if value == "" || direction == "" {
 		return 0
@@ -584,7 +586,8 @@ func ParseLatLon(value, direction string) float64 {
 	return result
 }
 
-// ParseFloat parses a string to float64, returning 0 for empty strings.
+// ParseFloat parses a string to float64, returning 0 for empty or unparseable strings.
+// In NMEA, empty fields are normal (e.g., no fix available), so errors are not returned.
 func ParseFloat(s string) float64 {
 	if s == "" {
 		return 0
@@ -593,7 +596,8 @@ func ParseFloat(s string) float64 {
 	return v
 }
 
-// ParseInt parses a string to int, returning 0 for empty strings.
+// ParseInt parses a string to int, returning 0 for empty or unparseable strings.
+// In NMEA, empty fields are normal (e.g., no fix available), so errors are not returned.
 func ParseInt(s string) int {
 	if s == "" {
 		return 0
