@@ -368,10 +368,16 @@ func parseSentence(raw string) (BaseSentence, error) {
 	talker := TalkerID(header[:2])
 	sentType := header[2:]
 
+	// Copy fields to a new slice so the parsed sentence does not retain
+	// a reference to the original strings.Split result, allowing GC to
+	// collect the backing array when the raw string is no longer needed.
+	dataFields := make([]string, len(fields)-1)
+	copy(dataFields, fields[1:])
+
 	return BaseSentence{
 		Talker:   talker,
 		Type:     sentType,
-		Fields:   fields[1:],
+		Fields:   dataFields,
 		Checksum: checksum,
 		Raw:      raw,
 	}, nil
